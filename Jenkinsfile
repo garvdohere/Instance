@@ -1,14 +1,16 @@
 pipeline {
+
     agent any
 
     environment {
-        DOCKER_IMAGE = "YOUR_DOCKERHUB_USERNAME/my-web-app"
-        CONTAINER_NAME = "my-web-app"
+        DOCKER_IMAGE = "instance-app"
+        CONTAINER_NAME = "instance-app"
+        APP_PORT = "8081"
     }
 
     stages {
 
-        stage('Pull Code from GitHub') {
+        stage('Checkout GitHub Code') {
             steps {
                 checkout scm
                 echo 'Code pulled successfully from GitHub'
@@ -24,49 +26,39 @@ pipeline {
             }
         }
 
-        stage('Push Image to Docker Hub') {
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'dockerhub-credentials',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )
-                ]) {
-                    sh '''
-                        echo "$DOCKER_PASS" | docker login \
-                        -u "$DOCKER_USER" --password-stdin
-
-                        docker push $DOCKER_IMAGE:$BUILD_NUMBER
-                        docker push $DOCKER_IMAGE:latest
-
-                        docker logout
-                    '''
-                }
-            }
-        }
-
-        stage('Deploy Container Locally') {
+        stage('Deploy Application Locally') {
             steps {
                 sh '''
                     docker rm -f $CONTAINER_NAME || true
 
                     docker run -d \
-                    --name $CONTAINER_NAME \
-                    --restart unless-stopped \
-                    -p 8080:80 \
-                    $DOCKER_IMAGE:latest
+                        --name $CONTAINER_NAME \
+                        --restart unless-stopped \
+                        -p $APP_PORT:80 \
+                        $DOCKER_IMAGE:latest
                 '''
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sh '''
+                    sleep 5
+                    curl --fail http://localhost:$APP_PORT
+                '''
+
+                echo 'Application deployed successfully!'
             }
         }
     }
 
     post {
         success {
-            echo 'CI/CD Pipeline completed successfully!'
+            echo 'CI/CD Pipeline executed successfully!'
         }
+
         failure {
-            echo 'CI/CD Pipeline failed. Check Jenkins console output.'
+            echo 'CI/CD Pipeline failed. Check Console Output.'
         }
     }
 }
